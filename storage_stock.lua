@@ -1,3 +1,4 @@
+--
 -- storage_stock.lua - Maintain stock of items in digital storage.
 -- Copyright (C) 2023  Russell E. Gibson
 --
