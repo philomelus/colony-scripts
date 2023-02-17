@@ -1,3 +1,42 @@
+-- storage_stock.lua - Maintain stock of items in digital storage.
+-- Copyright (C) 2023  Russell E. Gibson
+--
+-- This program is free software: you can redistribute it and/or modify
+-- it under the terms of the GNU General Public License as published by
+-- the Free Software Foundation, either version 3 of the License, or
+-- (at your option) any later version.
+--
+-- This program is distributed in the hope that it will be useful,
+-- but WITHOUT ANY WARRANTY; without even the implied warranty of
+-- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+-- GNU General Public License for more details.
+--
+-- You should have received a copy of the GNU General Public License
+-- along with this program.  If not, see <https://www.gnu.org/licenses/>.
+--
+
+---------------------------------------------------------------------------
+-- Lua script for use with CC: tweaked that will keep a minimum stock of
+-- any item contained within a list.  Works for both Refined Storage and
+-- Applied Energistics 2.
+--
+-- Requirements:
+-- 1.  Either a MEBridge or RSBridge connected to your computer.
+-- 2.  A ColonyIntegrator connected to your computer.
+-- 3.  Since the Colony Integrator must be within a colony for it to work,
+--     either place the computer and all periperals within a colony or use
+--     your choice of entagled blocks to accomplish the same.
+-- 4.  A monitor attached to the computer.  Most of the time, only a couple
+--     of lines are shown on the monitor.  Once in awhile, especially for
+--     larger colonies (or more advanced ...) there will be a long list.
+--     The script will only display what will fit on the monitor.
+--
+-- Finally, you will need to update some of the variables below.  Read the
+-- description in the comments directly before the variable to see what
+-- what you need to do.
+--
+
+---------------------------------------------------------------------------
 -- List of the items which should be stocked
 -- Table of tables of items.  Each item to be stocked should be in this table,
 -- inside a table containing  two items.  First item is minecraft name of item,
@@ -151,6 +190,10 @@ local bridge = peripheral.find("meBridge") or error("Unable to locate bridge.", 
 
 local mon = peripheral.find("monitor") or error("Unable to locate monitor.", -2)
 
+---------------------------------------------------------------------------
+-- MODIFY NOTHING BELOW HERE
+---------------------------------------------------------------------------
+
 -- Constants
 
 local S_LOW = 1					-- Not enough in stock
@@ -167,12 +210,13 @@ local label = "Stock"
 --
 -- itemName - Internal minecraft name (tag) for item
 -- minCount - Minimum number of item to maintain
--- dispLine - Line show status of item on monitor
--- onLeft - True to show in left column, otherwise right column
+-- line     - Line to show status of item on monitor
+-- onLeft   - true to show in left column, otherwise right column
 
-function checkItem(itemName, minCount, dispLine, onLeft)
+function checkItem(itemName, minCount, line, onLeft)
 	-- Get item info from storage
 	local item = bridge.getItem({name=itemName})
+	-- If item existed in storage
 	if item then
 		-- Number of items in the system lower than the minimum amount?
 		if item.amount < minCount then
@@ -184,36 +228,32 @@ function checkItem(itemName, minCount, dispLine, onLeft)
                 end
 				
 				-- Update display
-				updateState(item.displayName, dispLine, S_LOW, onLeft)
+				updateState(item.displayName, line, S_LOW, onLeft)
 				return
 			end
 		else
 			-- Enough stocked
-			updateState(item.displayName, dispLine, S_GOOD, onLeft)
+			updateState(item.displayName, line, S_GOOD, onLeft)
 			return
 		end
 		
 		-- Stock is low and its not craftable
-		updateState(item.displayName, dispLine, S_UNKNOWN, onLeft)
+		updateState(item.displayName, line, S_UNKNOWN, onLeft)
+		return
 	else
-		-- Item not in storage, but is it craftable but zero quantity?
+		-- Item not in storage, is it craftable but zero quantity?
 		local craft_items = bridge.listCraftableItems()
-		f = fs.open("craftables.txt", "w");
-		for ci = 1, #craft_items do
-			f.write(craft_items[ci].name .. "\n")
-		end
-		f.close()
 		for ci = 1, #craft_items do
 			if craft_items[ci].name == itemName then
 				bridge.craftItem({name = itemName, count = minCount})
-				updateState(craft_items[ci].displayName, dispLine, S_LOW, onLeft)
+				updateState(craft_items[ci].displayName, line, S_LOW, onLeft)
 				return
 			end
 		end
 		
 		-- Item not in storage, so can't stock it.  Don't have item info
 		-- so ugly internal minecraft name is shown instead of normal name.
-		updateState(itemName, dispLine, S_UNKNOWN, onLeft)
+		updateState(itemName, line, S_UNKNOWN, onLeft)
     end
 end
 
@@ -224,7 +264,7 @@ end
 --         amount of cpu time versus getting the value every call)
 
 function checkStock(items, count)
-	-- Rows on monitor to show items status'.  First row contains
+	-- First row on monitor to show items status'.  First row contains
 	-- centered title (useless???).
     local row = 2
 
@@ -249,16 +289,14 @@ end
 -- text = The nice display name to show for item
 -- line = Line number on monitor to display entry
 -- status = Current state of the item (from constants above)
--- left = True to show in left column, otherwise in right column
+-- left = true to show in left column, otherwise in right column
 
 function updateState(text, line, status, left)
-	local extX, extY = mon.getSize()
-
 	-- If line isn't on display, do nothing (allows showing as much as
 	-- the display can handle)
-	if line > extY then return end
+	if line > screen_h then return end
 	
-	local widthCols = math.floor((extX - 1) / 2)
+	local widthCols = math.floor((screen_w - 1) / 2)
 	local widthColsTitle = widthCols - 4
 	local rightCol = widthCols + 2
 	local shortText = text
@@ -266,7 +304,7 @@ function updateState(text, line, status, left)
 	if string.len(shortText) > widthColsTitle then
 		shortText = string.sub(text, 1, widthCols - 8) .. "..."
 	end
-	-- Entend title to full width so (potential) prior item name
+	-- Extend title to full width so (potential) prior item name
 	-- gets overwritten
 	if string.len(shortText) < widthColsTitle then
 		shortText = shortText .. string.rep(" ", widthColsTitle - string.len(shortText))
@@ -287,7 +325,7 @@ function updateState(text, line, status, left)
 	if left then
 		mon.setCursorPos(widthCols - 4, line)
 	else
-		mon.setCursorPos(extX - 4, line)
+		mon.setCursorPos(screen_w - 4, line)
 	end
 	
 	-- Determine text and color for status
@@ -303,18 +341,18 @@ function updateState(text, line, status, left)
 		statusText = "?!?"
 	end
 
-	-- Update status
+	-- Show status
 	mon.write(statusText)
 end
 
--- Put monitor is known state
+-- Put monitor in known state
 mon.clear()
 mon.setTextScale(monitor_scale)
 mon.setTextColor(colors.white)
 
--- Display title centered
-local w, h = mon.getSize()
-local left = math.floor((w - string.len(label)) / 2)
+-- Display title, centered
+screen_w, screen_h = mon.getSize()
+local left = math.floor((screen_w - string.len(label)) / 2)
 mon.setCursorPos(left, 1)
 mon.write(label)
 
