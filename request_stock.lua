@@ -1,5 +1,5 @@
 --
--- storage_stock.lua - Maintain stock of items in digital storage.
+-- request_stock.lua - Maintain stock of items in digital storage.
 -- Copyright (C) 2023  Russell E. Gibson
 --
 -- This program is free software: you can redistribute it and/or modify
@@ -50,8 +50,6 @@
 -- Line 373: Time in seconds between work order scans.
 
 ----------------------------------------------------------------------------
--- INITIALIZATION
-----------------------------------------------------------------------------
 
 -- Initialize Monitor
 -- A future update may allow for multiple monitors. This would allow one
@@ -73,10 +71,6 @@ end
 
 -- Point to location of chest or storage container
 local storage = "back"
-
-----------------------------------------------------------------------------
--- FUNCTIONS
-----------------------------------------------------------------------------
 
 -- Prints to the screen one row after another, scrolling the screen when
 -- reaching the bottom. Acts as a normal display where text is printed in
@@ -164,28 +158,34 @@ function displayTimer(mon, t)
     if t < 5 then timer_color = colors.red end
 
     mPrintRowJustified(mon, 1, "left", string.format("Time: %s [%s]    ", textutils.formatTime(now, false), cycle), cycle_color)
-    if cycle ~= "night" then mPrintRowJustified(mon, 1, "right", string.format("    Remaining: %ss", t), timer_color)
-    else mPrintRowJustified(mon, 1, "right", "    Remaining: PAUSED", colors.red) end
+    if cycle ~= "night" then
+		mPrintRowJustified(mon, 1, "right", string.format("    Remaining: %ss", t), timer_color)
+    else
+		mPrintRowJustified(mon, 1, "right", "    Remaining: PAUSED", colors.red)
+	end
 end
 
 function table_size(var)
-   local c = 0
-   for k,v in pairs(var) do
-	  c = c + 1
-   end
-   return c
+	local c = 0
+	for k,v in pairs(var) do
+		c = c + 1
+	end
+	return c
 end
 
 -- Scan all open work requests from the Warehouse and attempt to satisfy those
 -- requests.  Display all activity on the monitor, including time of day and the
 -- countdown timer before next scan.  This function is not called at night to
 -- save on some ticks, as the colonists are in bed anyways.  Items in red mean
--- work order can't be satisfied by Refined Storage (lack of pattern or lack of
+-- work order can't be satisfied by digital storage (lack of pattern or lack of
 -- required crafting ingredients).  Yellow means order partially filled and a
 -- crafting job was scheduled for the rest.  Green means order fully filled.
 -- Blue means the Player needs to manually fill the work order.  This includes
 -- equipment (Tools of Class), NBT items like armor, weapons and tools, as well
 -- as generic requests ike Compostables, Fuel, Food, Flowers, etc.
+
+-- TODO:  When the colonists go to bed changes when some research is completed...
+
 function scanWorkRequests(mon, ctrlr, chest)
     -- Before we do anything, prep the log file for this scan.
     -- The log file is truncated each time this function is called.
@@ -207,22 +207,18 @@ function scanWorkRequests(mon, ctrlr, chest)
     item_array = {}
     for index, item in ipairs(items) do
         if not item.nbt then
-		   item_array[item.name] = item.amount
+			item_array[item.name] = item.amount
 		else
-		   if type(item.nbt) == "table" then
-			  if table_size(item.nbt) == 1 and item.nbt.id then
-				 item_array[item.name] = item.amount
-			  end
-		   end
+			-- Sometimes an id is the only item in the nbt, and that shouldn't
+			-- disqualify its use
+			if type(item.nbt) == "table" then
+				local numItems = table_size(item.nbt)
+				if numItems == 1 and item.nbt.id then
+					item_array[item.name] = item.amount
+				end
+			end
         end
     end
-	-- items = ctrlr.listCraftableItems()
-	-- for index, item in ipairs(items) do
-	-- 	if not item.nbt then
-	-- 		if 
-	-- end
-	
-	--print("item_array contains "..table_size(item_array).." items.")
 	
     -- Scan the Warehouse for all open work requests. For each item, try to
     -- provide as much as possible from ME, then craft whatever is needed
@@ -251,7 +247,7 @@ function scanWorkRequests(mon, ctrlr, chest)
 				table.insert(target_words, word)
 				target_length = target_length + 1
 			end
-
+			
 			if target_length >= 3 then
 				target_name = target_words[target_length-2] .. " " .. target_words[target_length]
 			else
@@ -293,23 +289,33 @@ function scanWorkRequests(mon, ctrlr, chest)
 			if name == "Stack List" then useME = 0 end
 
 			color = colors.blue
+			local result
 			if useME == 1 then
-				if item_array[item] then
-					provided = ctrlr.exportItemToPeripheral({name=item, count=needed}, chest)
-				end
+				do
+					if item_array[item] then
+						if type(ctrlr.getItem({name=item})) == "table" then
+							result, provided = pcall(ctrlr.exportItemToPeripheral, {name=item, count=needed}, chest)
+							if not result then
+								color = colors.red
+								print(provided)
+								break
+							end
+						end
+					end
 
-				color = colors.green
-				if provided < needed then
-					if ctrlr.isItemCrafting({item}) then
-						color = colors.yellow
-						print("[Crafting]", item)
-					else
-						if ctrlr.craftItem({name=item, count=needed}) then
+					color = colors.green
+					if provided < needed then
+						if ctrlr.isItemCrafting({item}) then
 							color = colors.yellow
-							print("[Scheduled]", needed, "x", item)
+							print("[Crafting]", item)
 						else
-							color = colors.red
-							print("[Failed]", item)
+							if ctrlr.craftItem({name=item, count=needed}) then
+								color = colors.yellow
+								print("[Scheduled]", needed, "x", item)
+							else
+								color = colors.red
+								print("[Failed]", item)
+							end
 						end
 					end
 				end
@@ -419,13 +425,13 @@ while true do
     local e = {os.pullEvent()}
     if e[1] == "timer" and e[2] == TIMER then
         now = os.time()
-        if now >= 5 and now < 19.5 then
-            current_run = current_run - 1
-            if current_run <= 0 then
-                scanWorkRequests(monitor, bridge, storage)
-                current_run = time_between_runs
-            end
-        end
+        -- if now >= 5 and now < 19.5 then
+		current_run = current_run - 1
+		if current_run <= 0 then
+			scanWorkRequests(monitor, bridge, storage)
+			current_run = time_between_runs
+		end
+        -- end
         displayTimer(monitor, current_run)
         TIMER = os.startTimer(1)
     elseif e[1] == "monitor_touch" then

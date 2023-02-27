@@ -58,31 +58,70 @@
 -- { "minecraft:bone_meal", 64, 128 }
 
 local stock_items = {
+	{ "minecolonies:ancienttome", 32, 128 },
+	{ "minecraft:azure_bluet", 16, 64 },
 	{ "rootsclassic:blackcurrant", 16, 128 },
+	{ "minecraft:blue_orchid", 16, 64 },
 	{ "minecraft:bone", 16, 128 },
 	{ "minecraft:bone_meal", 64, 128 },
+	{ "minecraft:cactus", 16, 128 },
+	{ "minecraft:carrot", 64, 128 },
+	{ "minecraft:campfire", 16, 64 },
 	{ "minecraft:cauldron", 4, 64 },
 	{ "minecraft:clay", 1, 64 },
+	{ "minecraft:coal", 16, 128 },
+	{ "minecraft:cobbled_deepslate", 64, 256 },
+	{ "minecraft:cobblestone", 256, 1024 },
+	{ "minecolonies:compost", 64, 256 },
 	{ "minecraft:copper_ingot", 32, 128 },
+	{ "minecraft:cornflower", 16, 64 },
+	{ "minecraft:dandelion", 16, 64 },
+	{ "minecraft:dead_bush", 4, 64 },
+	{ "minecraft:dirt", 32, 256 },
+	{ "minecraft:egg", 16, 64 },
 	{ "rootsclassic:elderberry", 16, 128 },
+	{ "minecraft:flint", 32, 128 },
+	{ "minecraft:glass", 16, 128 },
+	{ "minecraft:glass_pane", 16, 128 },
 	{ "minecraft:gold_ingot", 32, 128 },
+	{ "minecraft:granite", 4, 128 },
+	{ "minecraft:honeycomb", 16, 64 },
 	{ "minecraft:iron_ingot", 32, 128 },
+	{ "minecraft:ladder", 16, 64 },
 	{ "minecraft:lapis_lazuli", 16, 128 },
 	{ "minecraft:leather", 16, 128 },
+	{ "minecraft:lily_pad", 4, 64 },
+	{ "minecraft:milk_bucket", 4, 16 },
+	{ "minecraft:netherrack", 16, 128 },
+	{ "minecraft:nether_wart", 16, 128 },
 	{ "minecraft:oak_log", 256, 512 },
+	{ "minecraft:oak_sapling", 16, 128 },
+	{ "minecraft:oak_wood", 16, 128 },
 	{ "minecraft:potato", 64, 128 },
 	{ "minecraft:prismarine_crystals", 4, 64 },
 	{ "minecraft:prismarine_shard", 4, 64 },
-	{ "minecraft:beef", 16, 128 }, -- Raw Beef
+	{ "minecraft:orange_tulip", 16, 64 },
+	{ "minecraft:poppy", 16, 64 },
+	{ "minecraft:beef", 128, 256 }, -- Raw Beef
 	{ "minecraft:cod", 16, 128 }, -- Raw Cod
 	{ "minecraft:mutton", 16, 128 }, -- Raw Mutton
-	{ "rootsclassic:redcurrant", 16, 128 },
+	{ "minecraft:porkchop", 16, 128 }, -- Raw Porkchop
+	{ "minecraft:rabbit", 16, 128 }, -- Raw Rabbit
 	{ "minecraft:salmon", 16, 128 }, -- Raw Salmon
+	{ "rootsclassic:redcurrant", 16, 128 },
+	{ "minecraft:redstone", 32, 128 },
+	{ "minecraft:soul_soil", 16, 64 },
+	{ "minecraft:stick", 16, 128 },
+	{ "minecraft:stone_bricks", 64, 256 },
 	{ "minecraft:sugar_cane", 16, 128 },
+	{ "minecraft:sunflower", 16, 64 },
+	{ "utilitix:tiny_coal", 256, 512 },
 	{ "minecraft:wheat", 128, 256 },
 	{ "minecraft:wheat_seeds", 128, 256 },
 	{ "rootsclassic:whitecurrant", 16, 128 },
+	{ "minecraft:white_tulip", 16, 64 },
 	{ "minecraft:white_wool", 16, 128 },
+	{ "minecraft:yellow_banner", 1, 8 },
 }
 
 -- Scale of text on monitor.  0.5 allows two columns of equal width
@@ -92,29 +131,65 @@ local monitor_scale = 0.5
 
 -- Amount of time, in seconds, between stock checks.
 
-local period = 5
+local period = 10
+
+-- Find a uniquely identified computer peripheral.
+--
+-- id = Unique peripheral id on this computer
+-- title = Name of item to display in error message
+-- timeout = Maximum number of seconds to retry locating
+--           periperal before failing.
+--
+-- On success, returns the peripheral table.
+-- On failure, generates error and exits.
+
+function findPeripheral(id, title, timeout)
+	local p = nil
+	local tries = 0
+	local period = timeout / 5
+	local r
+	while tries < 6 do
+		r, p = pcall(peripheral.find, id)
+		if r then
+			break
+		end
+		sleep(period)
+		tries = tries + 1
+	end
+	if p == nil then
+		error("Unable to locate " .. title .. ".", -1)
+	end
+	return p
+end
 
 -- This is the name of the warehouse inventory peripheral.  You can use the
 -- name of the block, "inventory" if no ither inventory is available to
 -- computer, or a direction (left/right/up/down/front/back)
 
-local warehouse = peripheral.find("entangled:tile") or error("Unable to locate warehouse.", -1)
+-- NOTE:  entangled:tile takes a few seconds to become available after
+--        initial load.
+
+local warehouse = findPeripheral("entangled:tile", "warehouse", 30)
 
 -- This is the name of the bridge peripheral.  For AE2 it should be "meBridge",
 -- and for RS it should be "rsBridge".
 
-local bridge = peripheral.find("meBridge") or error("Unable to locate bridge.", -2)
+local bridge = findPeripheral("meBridge", "bridge", 30)
 
--- Name (or side name if attached directly to computer) of monitor for status display.
--- If you have a lot of items to stock, make it pretty large (I normally use 6x4, so
--- 24 total Advanced Monitors).
+-- Name (or side name if attached directly to computer) of monitor for status
+-- display.  If you have a lot of items to stock, make it pretty large (I
+-- normally use 6x4, so 24 total Advanced Monitors).
 
-local mon = peripheral.find("monitor") or error("Unable to locate monitor.", -3)
+-- TODO:  Make this optional, as the display isn't _that_ useful
+
+local mon = findPeripheral("monitor", "monitor", 30)
 
 ---------------------------------------------------------------------------
--- MODIFY NOTHING BELOW HERE
+-- MODIFY NOTHING BELOW HERE (unless ...)
 ---------------------------------------------------------------------------
 
+-- Used for printing debug messages.  Not always needed, but easier
+-- than adding and removing the line regularly ...
 local pp = require("cc.pretty").pretty_print
 
 -- Constants
@@ -124,25 +199,6 @@ local S_HIGH = 2				-- Too much in stock
 local S_GOOD = 3				-- At least minimum amount in stock
 local S_NOCRAFT = 4				-- Not enough in stock, but not craftable
 local S_UNKNOWN = 5				-- Unable to determine stock
-
--- Locate item in inventory warehouse
--- Returns slot index if found, nil otherwise
-
-function find_item(name)
-	found = false
-	slots = {}
-	for slot, item in pairs(warehouse.list()) do
-		if item.name == name then
-			found = true
-			table.insert(slots, slot)
-		end
-	end
-	if found then
-		return slots
-	else
-		return nil
-	end
-end
 
 -- Given item name and minimum amount to keep stocked, ensure
 -- warehouse contains at least minimum amount of item.
@@ -155,7 +211,7 @@ end
 -- onLeft   - true to show in left column, otherwise right column
 
 function checkItem(itemName, minCount, maxCount, line, onLeft)
-	item = find_item(itemName)
+	item = findItem(itemName)
 	if item then
 		-- Get info on the slots with item
 		local items = {}
@@ -163,7 +219,7 @@ function checkItem(itemName, minCount, maxCount, line, onLeft)
 		local title = nil
 		for i, s in ipairs(item) do
 			items[s] = warehouse.getItemDetail(s)
-			if title == nil then
+			if items[s] and title == nil then
 				title = items[s].displayName
 			end
 		end
@@ -178,12 +234,16 @@ function checkItem(itemName, minCount, maxCount, line, onLeft)
 		if count > maxCount then
 			-- Move some to digital storage
 			updateStatus(title, line, S_HIGH, onLeft)
-			removeItems(itemName, items, count - maxCount)
+			removeItems(itemName, count - maxCount)
 		-- Not enough?
 		elseif count < minCount then
 			-- Get some from digital storage
 			updateStatus(title, line, S_LOW, onLeft)
-			if not getItems(itemName, items, minCount - count) then
+			local result, name = getItems(itemName, minCount - count)
+			if type(result) == "number" then
+				updateStatus(name, line, S_LOW, onLeft)
+			elseif not result then
+				print("Not craftable: " .. title)
 				updateStatus(title, line, S_NOCRAFT, onLeft)
 			end
 		else
@@ -191,13 +251,19 @@ function checkItem(itemName, minCount, maxCount, line, onLeft)
 			updateStatus(title, line, S_GOOD, onLeft)
 		end
 	else
-		updateStatus(itemName, line, S_UNKNOWN, onLeft)
+		-- Couldn't find item, attempt to move some from storage
+		local got, name = getItems(itemName, minCount)
+		if type(got) == "number" then
+			updateStatus(name, line, S_LOW, onLeft)
+		else
+			updateStatus(itemName, line, S_NOCRAFT, onLeft)
+		end
 	end
 end
 
 -- Check stock in all items in table.
 --
--- items = Table of items as documented at top of file
+-- items = Table of items as documented at near top of file
 -- count = Number of items in table (passing it here saves a tiny
 --         amount of cpu time versus getting the value every call)
 
@@ -217,16 +283,127 @@ function checkStock(items, count)
     end
 end
 
--- Get items from digital storage and place in warehouse
--- Returns false if not enough items in storage to fill
--- request and the item is not craftable
+-- Locate item in inventory warehouse
+--
+-- Returns table of all slot indexes if found, nil otherwise
 
--- TODO:  Craft the item if needed
+function findItem(name)
+	found = false
+	slots = {}
+	for slot, item in pairs(warehouse.list()) do
+		if item.name == name then
+			found = true
+			table.insert(slots, slot)
+		end
+	end
+	if found then
+		return slots
+	else
+		return nil
+	end
+end
 
-function getItems(item, slots, count)
-	local amount = bridge.exportItemToPeripheral({name=item, count=count},
-		peripheral.getName(warehouse))
-	return amount >= count
+-- Get items from digital storage and place in warehouse.
+--
+-- Returns 2 items:
+--   First is number of items moved, or false if there are not enough
+--         items in storage to fill request and the item is not craftable.
+--   If the first is a number, then second result is the display name
+--         of the item.  If first result is false, then this is nil.
+
+function getItems(item, count)
+	-- Attempt to craft the item
+	-- Returns true/false crafted, number crafted or nil,
+	--         display name or nil
+	local function docraft(name, count)
+		-- Not in storage.  Is it in craftables?
+		local craftables = bridge.listCraftableItems()
+		local index, detail
+		for index, detail in ipairs(craftables) do
+			if detail.name == name then
+				if bridge.craftItem({name=name, count=count}) then
+					return true, amount, detail.displayName
+				else
+					return true, 0, detail.displayName
+				end
+			end
+		end
+		return false, nil, nil
+	end
+	
+	local amount
+	local result, detail = pcall(bridge.getItem, {name=item})
+	if result then
+		if detail then			-- can be nil on success if item doesn't exist
+			if detail.amount >= count then
+				result, amount = pcall(bridge.exportItemToPeripheral, {name=item, count=count},
+									   peripheral.getName(warehouse))
+				if result then
+					return amount, detail.displayName
+				else
+					print("Item in storage, but move failed: " .. item
+						  .. "\n    (" .. tostring(amount) .. ")")
+					return false, nil
+				end
+			else
+				-- Item exists, but there aren't enough to satisfy the request.
+				-- Is it craftable?
+				if detail.isCraftable then
+					amount = count - detail.amount
+					if bridge.craftItem({name=item, count=amount}) then
+						return amount, detail.displayName
+					else
+						print("Not enough in storage, craft failed: " .. item)
+						return false, nil
+					end
+				else
+					print("Not in storage, not craftable: " .. item)
+					return false, nil
+				end
+			end
+		else
+			-- Not in storage.  Is it in craftables?
+			local count, title
+			result, count, title = docraft(item, amount)
+			if result then
+				if count > 0 then
+					-- Successfully crafting/ed
+					return count, title
+				else
+					-- Not is storage and crafting failed
+					print("Not in storage and craft failed: " .. item)
+					return false, nil
+				end
+			else
+				-- Not craftable.  Nothing to do.
+				print("Not in storage, not craftable: " .. item)
+				return false, nil
+			end
+		end
+	else
+		-- Item doesn't exist in storage or an error occured attempting
+		-- to get the item (which is treated as non-existant item)
+		-- Is it in the craftable list?
+		local count, title
+		result, count, title = docraft(item, amount)
+		if result then
+			if count > 0 then
+				-- Successfully crafting/ed
+				return count, title
+			else
+				-- Not is storage and crafting failed
+				print("Not in storage and craft failed: " .. item)
+				return false, nil
+			end
+		else
+			-- Not craftable.  Nothing to do.
+			print("Not in storage, not craftable: " .. item)
+			return false, nil
+		end
+	end
+
+	print("FAIL: " .. item .. " >" .. tostring(amount))
+	return false, nil
 end
 
 -- Remove items from warehouse and place in digital storage
@@ -235,7 +412,7 @@ end
 -- slots = Table of slot->details
 -- count = Total number to remove from warehouse
 
-function removeItems(item, slots, count)
+function removeItems(item, count)
 	return bridge.importItemFromPeripheral({name=item, count=count},
 		peripheral.getName(warehouse))
 end
@@ -317,7 +494,9 @@ local stockItemsCount = #stock_items
 
 -- Loop forever
 while true do
+    print("\nUpdate starting at", textutils.formatTime(os.time(), false) .. " ...")
     checkStock(stock_items, stockItemsCount)
+    print("Update complete at", textutils.formatTime(os.time(), false) .. ".")
     sleep(period)
 end
 

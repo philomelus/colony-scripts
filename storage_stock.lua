@@ -65,6 +65,7 @@ local items_to_stock = {
     {"minecraft:blue_stained_glass", 16},
     {"minecraft:blue_stained_glass_pane", 16},
     {"minecraft:blue_terracotta", 16},
+	{"minecraft:bone_meal", 64},
     {"minecraft:brown_concrete", 4},
     {"minecraft:brown_concrete_powder", 4},
     {"minecraft:brown_dye", 4},
